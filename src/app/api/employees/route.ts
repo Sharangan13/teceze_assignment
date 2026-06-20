@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data, error } = await supabase
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, Number(searchParams.get("page")) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(searchParams.get("pageSize")) || 10));
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from("employees")
-      .select("*")
-      .order("id", { ascending: true });
+      .select("*", { count: "exact" })
+      .order("id", { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
 
-    return NextResponse.json(data, { status: 200 });
+    const total = count ?? 0;
+    return NextResponse.json({
+      data,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Failed to fetch employees";
     return NextResponse.json({ error: message }, { status: 500 });

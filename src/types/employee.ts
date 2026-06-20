@@ -8,3 +8,12 @@ export interface Employee {
 }
 
 export type EmployeeFormData = Omit<Employee, "id" | "created_at">;
+
+
+export interface PaginatedEmployees {
+  data: Employee[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}

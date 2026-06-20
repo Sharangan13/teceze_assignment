@@ -8,6 +8,11 @@ import { Employee, EmployeeFormData } from "@/types/employee";
 import { toast } from "sonner";
 
 export default function HomePage() {
+  const PAGE_SIZE = 5;
+  const [page, setPage] = useState(1);
+const [totalPages, setTotalPages] = useState(1);
+const [total, setTotal] = useState(0);
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -18,98 +23,95 @@ export default function HomePage() {
   const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const fetchEmployees = useCallback(async () => {
-    try {
-      setError("");
-      const res = await fetch("/api/employees");
-      if (!res.ok) throw new Error("Failed to fetch employees");
-      const data = await res.json();
-      setEmployees(data);
-    } catch (err: unknown) 
-    {
-  const message = err instanceof Error ? err.message : "Failed to load employees";
-  setError(message);
-  toast.error(message);      
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [nextEmployeeNo, setNextEmployeeNo] = useState("EMP001");
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [fetchEmployees]);
 
-  // Generate next employee number
-  const getNextEmployeeNo = () => {
-    if (employees.length === 0) return "EMP001";
-    const nums = employees
-      .map((e) => parseInt(e.employee_no.replace(/\D/g, ""), 10))
-      .filter((n) => !isNaN(n));
-    const max = nums.length > 0 ? Math.max(...nums) : 0;
-    return `EMP${String(max + 1).padStart(3, "0")}`;
-  };
+
+const fetchEmployees = useCallback(async (targetPage: number) => {
+  try {
+    setLoading(true);
+    setError("");
+    const res = await fetch(`/api/employees?page=${targetPage}&pageSize=${PAGE_SIZE}`);
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error || "Failed to fetch employees");
+    setEmployees(result.data);
+    setPage(result.page);
+    setTotalPages(result.totalPages);
+    setTotal(result.total);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Failed to load employees";
+    setError(message);
+    toast.error(message);
+  } finally {
+    setLoading(false);
+  }
+}, []);
+
+useEffect(() => {
+  fetchEmployees(1);
+}, [fetchEmployees]);
+
+
 
   // Add employee
-  const handleAdd = async (data: EmployeeFormData) => {
-    const res = await fetch("/api/employees", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
+const handleAdd = async (data: EmployeeFormData) => {
+  const res = await fetch("/api/employees", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Failed to add employee");
+  toast.success(`${result.employee_name} added successfully`);
+  await fetchEmployees(1); // new row sorts to page 1 with the descending order above
+};
 
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || "Failed to add employee");
+const handleEdit = async (data: EmployeeFormData) => {
+  if (!editingEmployee) return;
+  const res = await fetch(`/api/employees/${editingEmployee.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || "Failed to update employee");
+  toast.success(`${result.employee_name} updated successfully`);
+  setEditingEmployee(null);
+  await fetchEmployees(page); // stay on the same page
+};
 
-    setEmployees((prev) => [...prev, result]);
-    toast.success(`${result.employee_name} added successfully`);
-  };
-
-  // Edit employee
-  const handleEdit = async (data: EmployeeFormData) => {
-    if (!editingEmployee) return;
-
-    const res = await fetch(`/api/employees/${editingEmployee.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || "Failed to update employee");
-
-    setEmployees((prev) =>
-      prev.map((emp) => (emp.id === editingEmployee.id ? result : emp))
-    );
-    setEditingEmployee(null);
-    toast.success(`${result.employee_name} updated successfully`);
-  };
-
-  // Delete employee
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteLoading(true);
-    try {
-      const res = await fetch(`/api/employees/${deleteTarget.id}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const result = await res.json();
-        throw new Error(result.error || "Failed to delete");
-      }
-      setEmployees((prev) => prev.filter((emp) => emp.id !== deleteTarget.id));
-      toast.success(`${deleteTarget.employee_name} deleted`);
-      setDeleteTarget(null);
-     } catch (err) {
+const handleDelete = async () => {
+  if (!deleteTarget) return;
+  setDeleteLoading(true);
+  try {
+    const res = await fetch(`/api/employees/${deleteTarget.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const result = await res.json();
+      throw new Error(result.error || "Failed to delete");
+    }
+    toast.success(`${deleteTarget.employee_name} deleted`);
+    const wasLastOnPage = employees.length === 1 && page > 1;
+    setDeleteTarget(null);
+    await fetchEmployees(wasLastOnPage ? page - 1 : page); // step back a page if it's now empty
+  } catch (err) {
     toast.error(err instanceof Error ? err.message : "Failed to delete employee");
   } finally {
-      setDeleteLoading(false);
-    }
-  };
+    setDeleteLoading(false);
+  }
+};
 
-  const openAddModal = () => {
-    setEditingEmployee(null);
-    setIsModalOpen(true);
-  };
+const openAddModal = async () => {
+  setEditingEmployee(null);
+  try {
+    const res = await fetch("/api/employees/next-number");
+    const result = await res.json();
+    setNextEmployeeNo(result.employee_no);
+  } catch {
+    toast.error("Couldn't generate the next employee number");
+  }
+  setIsModalOpen(true);
+};
+
 
   const openEditModal = (employee: Employee) => {
     setEditingEmployee(employee);
@@ -146,9 +148,7 @@ export default function HomePage() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Employees</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              {loading ? "Loading..." : `${employees.length} total records`}
-            </p>
+
           </div>
           <button
             onClick={openAddModal}
@@ -168,7 +168,7 @@ export default function HomePage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span className="text-sm">{error}</span>
-            <button onClick={fetchEmployees} className="ml-auto text-red-600 hover:text-red-800 text-sm font-medium underline">
+            <button onClick={() => fetchEmployees(page)} className="ml-auto text-red-600 hover:text-red-800 text-sm font-medium underline">
               Retry
             </button>
           </div>
@@ -193,6 +193,11 @@ export default function HomePage() {
             employees={employees}
             onEdit={openEditModal}
             onDelete={(emp) => setDeleteTarget(emp)}
+              page={page}
+  pageSize={PAGE_SIZE}
+  total={total}
+  totalPages={totalPages}
+  onPageChange={fetchEmployees}
           />
         )}
       </main>
@@ -203,7 +208,7 @@ export default function HomePage() {
         onClose={closeModal}
         onSubmit={editingEmployee ? handleEdit : handleAdd}
         employee={editingEmployee}
-        nextEmployeeNo={getNextEmployeeNo()}
+        nextEmployeeNo={nextEmployeeNo}
       />
 
       <DeleteConfirmModal

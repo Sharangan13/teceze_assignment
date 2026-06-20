@@ -1,17 +1,28 @@
 "use client";
 
 import { Employee } from "@/types/employee";
+import Pagination from "./Pagination";
 
 interface EmployeeTableProps {
   employees: Employee[];
   onEdit: (employee: Employee) => void;
   onDelete: (employee: Employee) => void;
+    page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
 }
 
 export default function EmployeeTable({
   employees,
   onEdit,
   onDelete,
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPageChange,
 }: EmployeeTableProps) {
   if (employees.length === 0) {
     return (
@@ -114,14 +125,19 @@ export default function EmployeeTable({
         </table>
       </div>
 
-      {/* Footer count */}
-      <div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50">
-        <p className="text-xs text-gray-500">
-          Showing{" "}
-          <span className="font-semibold text-gray-700">{employees.length}</span>{" "}
-          {employees.length === 1 ? "employee" : "employees"}
-        </p>
-      </div>
+
+{/* Footer */}
+<div className="px-6 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between gap-4 flex-wrap">
+  <p className="text-xs text-gray-500">
+    Showing{" "}
+    <span className="font-semibold text-gray-700">
+      {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)}
+    </span>{" "}
+    of <span className="font-semibold text-gray-700">{total}</span>{" "}
+    {total === 1 ? "employee" : "employees"}
+  </p>
+  <Pagination page={page} totalPages={totalPages} onPageChange={onPageChange} />
+</div>
     </div>
   );
 }
