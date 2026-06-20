@@ -5,6 +5,7 @@ import EmployeeModal from "@/components/EmployeeModal";
 import EmployeeTable from "@/components/EmployeeTable";
 import DeleteConfirmModal from "@/components/DeleteConfirmModal";
 import { Employee, EmployeeFormData } from "@/types/employee";
+import { toast } from "sonner";
 
 export default function HomePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -24,8 +25,11 @@ export default function HomePage() {
       if (!res.ok) throw new Error("Failed to fetch employees");
       const data = await res.json();
       setEmployees(data);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load employees");
+    } catch (err: unknown) 
+    {
+  const message = err instanceof Error ? err.message : "Failed to load employees";
+  setError(message);
+  toast.error(message);      
     } finally {
       setLoading(false);
     }
@@ -57,6 +61,7 @@ export default function HomePage() {
     if (!res.ok) throw new Error(result.error || "Failed to add employee");
 
     setEmployees((prev) => [...prev, result]);
+    toast.success(`${result.employee_name} added successfully`);
   };
 
   // Edit employee
@@ -76,6 +81,7 @@ export default function HomePage() {
       prev.map((emp) => (emp.id === editingEmployee.id ? result : emp))
     );
     setEditingEmployee(null);
+    toast.success(`${result.employee_name} updated successfully`);
   };
 
   // Delete employee
@@ -91,8 +97,11 @@ export default function HomePage() {
         throw new Error(result.error || "Failed to delete");
       }
       setEmployees((prev) => prev.filter((emp) => emp.id !== deleteTarget.id));
+      toast.success(`${deleteTarget.employee_name} deleted`);
       setDeleteTarget(null);
-    } finally {
+     } catch (err) {
+    toast.error(err instanceof Error ? err.message : "Failed to delete employee");
+  } finally {
       setDeleteLoading(false);
     }
   };
